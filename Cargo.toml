@@ -1,0 +1,41 @@
+[package]
+name = "serial_server"
+version = "0.1.0"
+edition = "2021"
+authors = ["KizzyCode Software Labs./Keziah Biermann <development@kizzycode.de>"]
+keywords = []
+categories = []
+description = "FIXME"
+license = "BSD-2-Clause OR MIT"
+repository = "https://github.com/KizzyCode/SerialServer-rust"
+readme = "README.md"
+build = "build.rs"
+
+
+[[bin]]
+name = "serial-server"
+path = "src/main.rs"
+
+
+[badges]
+appveyor = { repository = "KizzyCode/SerialServer-rust" }
+
+
+[features]
+default = []
+
+
+[dependencies]
+backtrace = "0.3.66"
+serde = { version = "1.0.143", features = ["derive"] }
+toml = "0.5.9"
+
+[build-dependencies]
+cc = "1.0.73"
+
+
+[profile.release]
+overflow-checks = true
+
+[profile.bench]
+overflow-checks = true

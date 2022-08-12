@@ -1,0 +1,10 @@
+{
+    "rust-analyzer.checkOnSave.allTargets": true,
+    "[rust]": {
+        "editor.formatOnSave": true
+    },
+    "files.associations": {
+        "*.cps": "javascript",
+        "unistd.h": "c"
+    }
+}
