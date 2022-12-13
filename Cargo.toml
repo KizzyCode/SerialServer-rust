@@ -1,6 +1,6 @@
 [package]
 name = "serial_server"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["KizzyCode Software Labs./Keziah Biermann <development@kizzycode.de>"]
 keywords = []
@@ -26,8 +26,7 @@ default = []
 
 
 [dependencies]
-backtrace = "0.3.66"
-serde = { version = "1.0.143", features = ["derive"] }
+serde = { version = "1.0.150", features = ["derive"] }
 toml = "0.5.9"
 
 [build-dependencies]

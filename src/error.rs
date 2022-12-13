@@ -1,13 +1,12 @@
 //! Implements the crate's error type
 
 use std::{
+    backtrace::Backtrace,
     error,
     ffi::NulError,
     fmt::{self, Display, Formatter},
     io,
 };
-
-use backtrace::Backtrace;
 
 /// Creates a new I/O error
 #[macro_export]
@@ -34,7 +33,7 @@ impl Error {
     where
         T: ToString,
     {
-        let backtrace = Backtrace::new();
+        let backtrace = Backtrace::capture();
         Self { error: error.to_string(), source: None, backtrace }
     }
     /// Creates a new error
@@ -43,7 +42,7 @@ impl Error {
         T: std::error::Error + Send + 'static,
     {
         let error = Box::new(error);
-        let backtrace = Backtrace::new();
+        let backtrace = Backtrace::capture();
         Self { error: error.to_string(), source: Some(error), backtrace }
     }
 }

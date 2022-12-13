@@ -4,7 +4,7 @@
 [![docs.rs](https://docs.rs/serial_server/badge.svg)](https://docs.rs/serial_server)
 [![crates.io](https://img.shields.io/crates/v/serial_server.svg)](https://crates.io/crates/serial_server)
 [![Download numbers](https://img.shields.io/crates/d/serial_server.svg)](https://crates.io/crates/serial_server)
-[![dependency status](https://deps.rs/crate/serial_server/0.1.0/status.svg)](https://deps.rs/crate/serial_server/0.1.0)
+[![dependency status](https://deps.rs/crate/serial_server/0.2.0/status.svg)](https://deps.rs/crate/serial_server/0.2.0)
 
 
 # `SerialServer`
