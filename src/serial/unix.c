@@ -8,32 +8,33 @@
 /**
  * @brief Opens a serial device file
  * 
+ * @param fd The target pointer to store the file descriptor
  * @param path The path to open
  * @param bauds The baud rate to configure
- * @return The device file descriptor or `-1` in case of an error
+ * @return `NULL` on success or a static error string in case of a failure
  */
-int64_t serial_open(const uint8_t* path, uint64_t bauds) {
+const char* serial_open(int64_t* fd, const uint8_t* path, uint64_t bauds) {
     // Open the device file nonblocking
-    int devfile = open((const char*)path, O_RDWR | O_NONBLOCK);
-    if (devfile < 0) {
-        return -1;
+    *fd = open((const char*)path, O_RDWR | O_NONBLOCK);
+    if (*fd < 0) {
+        return "failed to open serial file";
     }
 
     // Make the file blocking again
-    int flags = fcntl(devfile, F_GETFL, 0);
-    if (fcntl(devfile, F_SETFL, flags & ~O_NONBLOCK) != 0) {
-        return -1;
+    int flags = fcntl(*fd, F_GETFL, 0);
+    if (fcntl(*fd, F_SETFL, flags & ~O_NONBLOCK) != 0) {
+        return "failed to set mode to blocking";
     }
 
     // Get the device attributes
     struct termios tty;
-    if (tcgetattr(devfile, &tty) != 0) {
-        return -1;
+    if (tcgetattr(*fd, &tty) != 0) {
+        return "failed to get device attributes";
     }
 
     // Set the speed
     if (cfsetspeed(&tty, bauds) != 0) {
-        return -1;
+        return "failed to set baudrate";
     }
 
     // Disable parity generation on output and parity checking for input
@@ -69,20 +70,25 @@ int64_t serial_open(const uint8_t* path, uint64_t bauds) {
     tty.c_cc[VTIME] = 0;
     
     // Apply the updated TTY settings
-    if (tcsetattr(devfile, TCSANOW, &tty) != 0) {
-        return -1;
+    if (tcsetattr(*fd, TCSANOW, &tty) != 0) {
+        return "failed to apply TTY settings";
     }
-    return devfile;
+    return NULL;
 }
 
 /**
- * @brief Duplicates `fd`
+ * @brief Duplicates a file descriptor
  * 
- * @param fd The file descriptor to duplicate
+ * @param fd The target pointer to store the file descriptor
+ * @param org The file descriptor to duplicate
  * @return The duplicate file descriptor or `-1` in case of an error
  */
-int64_t serial_duplicate(int64_t fd) {
-    return dup((int)fd);
+const char* serial_duplicate(int64_t* fd, int64_t org) {
+    *fd = (int64_t)dup((int)org);
+    if (*fd < 0) {
+        return "failed to duplicate file descriptor";
+    }
+    return NULL;
 }
 
 /**
@@ -94,28 +100,35 @@ int64_t serial_duplicate(int64_t fd) {
  * @param pos The position within the buffer
  * @param capacity The total capacity of the buffer
  * @param fd The file descriptor to read from
- * @return `0` or `-1` on error 
+ * @return `NULL` on success or a static error string in case of a failure
  */
-int32_t serial_read_buf(uint8_t* buf, size_t* pos, size_t capacity, int64_t fd) {
+const char* serial_read_buf(uint8_t* buf, size_t* pos, size_t capacity, int64_t fd) {
     // Return if the buffer is exhausted
     const size_t available = capacity - *pos;
     if (available == 0) {
-        return 0;
+        return NULL;
     }
 
-    // Read some data
-    ssize_t read_ = read((int)fd, buf + *pos, available);
-    if (read_ == 0) {
-        errno = EOF;
-        return -1;
-    }
-    if (read_ < 0) {
-        return -1;
-    }
+    retry: {
+        // Read some data
+        ssize_t read_ = read((int)fd, buf + *pos, available);
+        if (read_ < 0 && errno == EINTR) {
+            goto retry;
+        }
+        
+        // Parse the result
+        if (read_ == 0) {
+            errno = EOF;
+            return "failed to read some data due to EOF";
+        }
+        if (read_ < 0) {
+            return "failed to read some data";
+        }
 
-    // Update the buffer
-    *pos += read_;
-    return 0;
+        // Update the buffer
+        *pos += read_;
+        return NULL;
+    }
 }
 
 /**
@@ -125,28 +138,35 @@ int32_t serial_read_buf(uint8_t* buf, size_t* pos, size_t capacity, int64_t fd) 
  * @param buf The buffer to write to
  * @param pos The position within the buffer
  * @param capacity The total capacity of the buffer
- * @return `0` or `-1` on error  
+ * @return `NULL` on success or a static error string in case of a failure
  */
-int32_t serial_write_buf(int64_t fd, const uint8_t* buf, size_t* pos, size_t capacity) {
+const char* serial_write_buf(int64_t fd, const uint8_t* buf, size_t* pos, size_t capacity) {
     // Return if the buffer is exhausted
     const size_t available = capacity - *pos;
     if (available == 0) {
-        return 0;
+        return NULL;
     }
 
-    // Write some data
-    ssize_t written = write((int)fd, buf + *pos, available);
-    if (written == 0) {
-        errno = EOF;
-        return -1;
-    }
-    if (written < 0) {
-        return -1;
-    }
+    retry: {
+        // Write some data
+        ssize_t written = write((int)fd, buf + *pos, available);
+        if (written < 0 && errno == EINTR) {
+            goto retry;
+        }
 
-    // Update the buffer
-    *pos += written;
-    return 0;
+        // Parse the result
+        if (written == 0) {
+            errno = EOF;
+            return "failed to read some data due to EOF";
+        }
+        if (written < 0) {
+            return "failed to read some data";
+        }
+
+        // Update the buffer
+        *pos += written;
+        return NULL;
+    }
 }
 
 
@@ -154,14 +174,14 @@ int32_t serial_write_buf(int64_t fd, const uint8_t* buf, size_t* pos, size_t cap
  * @brief Waits until the data has been flushed to the serial device
  * 
  * @param fd The file descriptor to flush
- * @return `0` or `-1` on error   
+ * @return `NULL` on success or a static error string in case of a failure
  */
-int32_t serial_flush(int64_t fd) {
+const char* serial_flush(int64_t fd) {
     int result = tcdrain((int)fd);
     if (result < 0) {
-        return -1;
+        return "failed to flush serial device";
     }
-    return 0;
+    return NULL;
 }
 
 

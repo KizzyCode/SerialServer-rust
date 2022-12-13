@@ -2,7 +2,6 @@
 
 use crate::{config::Config, error::Error, logger::Logger, serial::SerialDevice};
 use std::{
-    io::{self, Read, Write},
     net::{ToSocketAddrs, UdpSocket},
     thread,
 };
@@ -60,12 +59,13 @@ impl Server {
             socket.set_ttl(self.config.udp.ttl)?;
 
             // Create the closure
-            move |buf: &[u8]| -> io::Result<usize> {
+            move |buf: &[u8]| -> Result<usize, Error> {
                 // Send UDP packet if a multicast address is defined or perform a no-op
-                match address.as_ref() {
-                    Some(multicast) => socket.send_to(buf, multicast),
-                    None => Ok(buf.len()),
-                }
+                let sent = match address.as_ref() {
+                    Some(multicast) => socket.send_to(buf, multicast)?,
+                    None => buf.len(),
+                };
+                Ok(sent)
             }
         };
 
