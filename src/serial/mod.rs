@@ -13,11 +13,14 @@ extern "C" {
     // int64_t serial_duplicate(int64_t fd)
     fn serial_duplicate(fd: i64) -> i64;
 
-    // int32_t serial_read_one(int64_t fd, uint8_t* buf)
-    fn serial_read_one(fd: i64, buf: *mut u8) -> i32;
+    // int32_t serial_read_buf(uint8_t* buf, size_t* pos, size_t capacity, int64_t fd)
+    fn serial_read_buf(buf: *mut u8, pos: *mut usize, capacity: usize, fd: i64) -> i32;
 
-    // int32_t serial_write_one(int64_t fd, const uint8_t* byte)
-    fn serial_write_one(fd: i64, byte: *const u8) -> i32;
+    // int32_t serial_write_buf(int64_t fd, const uint8_t* buf, size_t* pos, size_t capacity)
+    fn serial_write_buf(fd: i64, buf: *const u8, pos: *mut usize, capacity: usize) -> i32;
+
+    // int32_t serial_flush(int64_t fd)
+    fn serial_flush(fd: i64) -> i32;
 
     // void serial_close(int64_t fd)
     fn serial_close(fd: i64);
@@ -31,11 +34,11 @@ pub struct SerialDevice {
 impl SerialDevice {
     /// Opens a serial device
     pub fn new(path: &str, baudrate: u64) -> Result<Self, Error> {
-        // Prepare the path
-        let path = CString::new(path)?;
-
         // Open the serial device
+        let path = CString::new(path)?;
         let fd = unsafe { serial_open(path.as_bytes_with_nul().as_ptr(), baudrate) };
+
+        // Validate the result
         if fd < 0 {
             let errno = io::Error::last_os_error();
             return Err(errno.into());
@@ -47,6 +50,8 @@ impl SerialDevice {
     pub fn try_clone(&self) -> io::Result<Self> {
         // Duplicate file descriptor
         let fd = unsafe { serial_duplicate(self.fd) };
+
+        // Validate the result
         if fd < 0 {
             let errno = io::Error::last_os_error();
             return Err(errno);
@@ -56,35 +61,40 @@ impl SerialDevice {
 }
 impl Read for SerialDevice {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        for (pos, byte) in buf.iter_mut().enumerate() {
-            // Read next byte
-            let result = unsafe { serial_read_one(self.fd, byte) };
-            if result < 0 {
-                let errno = io::Error::last_os_error();
-                return Err(errno);
-            }
+        // Read into `buf`
+        let mut pos = 0;
+        let result = unsafe { serial_read_buf(buf.as_mut_ptr(), &mut pos, buf.len(), self.fd) };
 
-            // Fast return if newline
-            if *byte == b'\n' {
-                return Ok(pos + 1);
-            }
+        // Validate the result
+        if result < 0 {
+            let errno = io::Error::last_os_error();
+            return Err(errno);
         }
-        Ok(buf.len())
+        Ok(pos)
     }
 }
 impl Write for SerialDevice {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        for byte in buf.iter() {
-            // Write next byte
-            let result = unsafe { serial_write_one(self.fd, byte) };
-            if result < 0 {
-                let errno = io::Error::last_os_error();
-                return Err(errno);
-            }
+        // Write from `buf`
+        let mut pos = 0;
+        let result = unsafe { serial_write_buf(self.fd, buf.as_ptr(), &mut pos, buf.len()) };
+
+        // Validate the result
+        if result < 0 {
+            let errno = io::Error::last_os_error();
+            return Err(errno);
         }
-        Ok(buf.len())
+        Ok(pos)
     }
     fn flush(&mut self) -> io::Result<()> {
+        // Flush the device
+        let result = unsafe { serial_flush(self.fd) };
+
+        // Validate the result
+        if result < 0 {
+            let errno = io::Error::last_os_error();
+            return Err(errno);
+        }
         Ok(())
     }
 }

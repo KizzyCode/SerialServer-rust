@@ -32,10 +32,7 @@ int64_t serial_open(const uint8_t* path, uint64_t bauds) {
     }
 
     // Set the speed
-    if (cfsetispeed(&tty, bauds) != 0) {
-        return -1;
-    }
-    if (cfsetospeed(&tty, bauds) != 0) {
+    if (cfsetspeed(&tty, bauds) != 0) {
         return -1;
     }
 
@@ -85,51 +82,88 @@ int64_t serial_open(const uint8_t* path, uint64_t bauds) {
  * @return The duplicate file descriptor or `-1` in case of an error
  */
 int64_t serial_duplicate(int64_t fd) {
-    return dup(fd);
+    return dup((int)fd);
 }
 
 /**
- * @brief Reads one byte from `fd`
+ * @brief Reads some data into `buf` and updates `pos` accordingly
  * 
- * @param fd The file descriptor to write to
- * @param buf The target buffer
- * @return `0` or `-1` on error
+ * @note This function attempts to always read at least one byte
+ * 
+ * @param buf The target buffer to read into
+ * @param pos The position within the buffer
+ * @param capacity The total capacity of the buffer
+ * @param fd The file descriptor to read from
+ * @return `0` or `-1` on error 
  */
-int32_t serial_read_one(int64_t fd, uint8_t* buf) {
-    // Try to read a single byte
-    ssize_t read_ = read(fd, buf, 1);
+int32_t serial_read_buf(uint8_t* buf, size_t* pos, size_t capacity, int64_t fd) {
+    // Return if the buffer is exhausted
+    const size_t available = capacity - *pos;
+    if (available == 0) {
+        return 0;
+    }
+
+    // Read some data
+    ssize_t read_ = read((int)fd, buf + *pos, available);
     if (read_ == 0) {
         errno = EOF;
-    }
-    if (read_ < 1) {
         return -1;
     }
+    if (read_ < 0) {
+        return -1;
+    }
+
+    // Update the buffer
+    *pos += read_;
     return 0;
 }
 
 /**
- * @brief Writes one byte to `fd`
+ * @brief Writes some data from `buf` and updates `pos` accordingly
  * 
  * @param fd The file descriptor to write to
- * @param byte The byte to write
- * @return `0` or `-1` on error
+ * @param buf The buffer to write to
+ * @param pos The position within the buffer
+ * @param capacity The total capacity of the buffer
+ * @return `0` or `-1` on error  
  */
-int32_t serial_write_one(int64_t fd, const uint8_t* byte) {
-    // Write a single byte
-    ssize_t written = write(fd, byte, 1);
+int32_t serial_write_buf(int64_t fd, const uint8_t* buf, size_t* pos, size_t capacity) {
+    // Return if the buffer is exhausted
+    const size_t available = capacity - *pos;
+    if (available == 0) {
+        return 0;
+    }
+
+    // Write some data
+    ssize_t written = write((int)fd, buf + *pos, available);
     if (written == 0) {
         errno = EOF;
+        return -1;
     }
-    if (written < 1) {
+    if (written < 0) {
         return -1;
     }
 
-    // Flush output
-    if (fsync(fd) != 0) {
+    // Update the buffer
+    *pos += written;
+    return 0;
+}
+
+
+/**
+ * @brief Waits until the data has been flushed to the serial device
+ * 
+ * @param fd The file descriptor to flush
+ * @return `0` or `-1` on error   
+ */
+int32_t serial_flush(int64_t fd) {
+    int result = tcdrain((int)fd);
+    if (result < 0) {
         return -1;
     }
     return 0;
 }
+
 
 /**
  * @brief Closes `fd`
@@ -137,5 +171,5 @@ int32_t serial_write_one(int64_t fd, const uint8_t* byte) {
  * @param fd The file descriptor to close
  */
 void serial_close(int64_t fd) {
-    close(fd);
+    close((int)fd);
 }
