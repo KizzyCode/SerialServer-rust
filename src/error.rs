@@ -1,7 +1,7 @@
 //! Implements the crate's error type
 
 use std::{
-    backtrace::Backtrace,
+    backtrace::{Backtrace, BacktraceStatus},
     error,
     ffi::NulError,
     fmt::{self, Display, Formatter},
@@ -48,8 +48,15 @@ impl Error {
 }
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        // Print the error
         writeln!(f, "{}", self.error)?;
-        writeln!(f, "{:?}", self.backtrace)?;
+
+        // Print backtrace
+        if self.backtrace.status() == BacktraceStatus::Captured {
+            writeln!(f)?;
+            writeln!(f, "Backtrace:")?;
+            writeln!(f, "{}", self.backtrace)?;
+        }
         Ok(())
     }
 }
