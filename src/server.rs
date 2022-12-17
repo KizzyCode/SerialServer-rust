@@ -22,7 +22,6 @@ impl Server {
     pub fn new(config: Config) -> Result<Self, Error> {
         // Setup socket
         let socket = UdpSocket::bind(&config.udp.listen)?;
-        socket.set_ttl(config.udp.ttl)?;
 
         // Setup spipe and logger
         let serial = SerialDevice::new(&config.serial.device, config.serial.baudrate)?;
@@ -46,27 +45,35 @@ impl Server {
     }
     /// The serial->UDP runloop
     fn runloop_serial2udp(&self, mut serial: SerialDevice) -> Result<(), Error> {
-        // Unwrap and resolve the remote address
-        let address = (self.config.udp.send.as_ref())
-            .map(|address| address.to_socket_addrs())
-            .transpose()?
-            .and_then(|mut addresses| addresses.next());
+        // Unwrap and resolve the remote address and create the socket
+        let maybe_address_socket = 'make_socket: {
+            // Unwrap the address
+            let Some(address_string) = &self.config.udp.send else {
+                break 'make_socket None;
+            };
+
+            // Parse the address
+            let Ok(mut addresses) = address_string.to_socket_addrs() else {
+                break 'make_socket None;
+            };
+            let Some(address) = addresses.next() else {
+                break 'make_socket None;
+            };
+
+            // Create the socket
+            let socket = UdpSocket::bind(address)?;
+            socket.set_ttl(self.config.udp.ttl)?;
+            Some((address, socket))
+        };
 
         // The `socket::send_to` implementation *if there is a remote address configured*
-        let socket_send_to = {
-            // Create the socket
-            let socket = UdpSocket::bind("0.0.0.0:0")?;
-            socket.set_ttl(self.config.udp.ttl)?;
-
-            // Create the closure
-            move |buf: &[u8]| -> Result<usize, Error> {
-                // Send UDP packet if a multicast address is defined or perform a no-op
-                let sent = match address.as_ref() {
-                    Some(multicast) => socket.send_to(buf, multicast)?,
-                    None => buf.len(),
-                };
-                Ok(sent)
-            }
+        let socket_send_to = move |buf: &[u8]| -> Result<usize, Error> {
+            // Send UDP packet if a multicast address is defined or perform a no-op
+            let sent = match maybe_address_socket.as_ref() {
+                Some((address, socket)) => socket.send_to(buf, address)?,
+                None => buf.len(),
+            };
+            Ok(sent)
         };
 
         // Send the packets
@@ -90,6 +97,7 @@ impl Server {
             if bytes_read > 0 {
                 // Write the message to the serial device
                 serial.write_all(&buf[..bytes_read])?;
+                serial.flush()?;
                 self.log(&buf[..bytes_read]);
             }
         }
