@@ -169,7 +169,6 @@ const char* serial_write_buf(int64_t fd, const uint8_t* buf, size_t* pos, size_t
     }
 }
 
-
 /**
  * @brief Waits until the data has been flushed to the serial device
  * 
@@ -183,7 +182,6 @@ const char* serial_flush(int64_t fd) {
     }
     return NULL;
 }
-
 
 /**
  * @brief Closes `fd`
