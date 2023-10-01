@@ -64,6 +64,8 @@ const char* serial_open(int64_t* fd, const uint8_t* path, uint64_t bauds) {
     tty.c_oflag &= ~OPOST;
     // Don't map NL to CR-NL on output
     tty.c_oflag &= ~ONLCR;
+    // Disable terminal echo
+    tty.c_lflag &= ~ECHO;
     // Minimum number of characters for noncanonical read
     tty.c_cc[VMIN] = 1;
     // Timeout in deciseconds for noncanonical read
